@@ -1,0 +1,16 @@
+input {
+  kafka {
+    zk_connect => "localhost:2181"
+    topic_id => "rsyslog_logstash"
+    type => "apache"
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => "localhost"
+    port => 9200
+    manage_template => false
+    # workers => 5
+  }
+}

@@ -1,0 +1,89 @@
+# system logs
+module(load="imuxsock")
+module(load="imklog")
+# file
+module(load="imfile")
+# parser
+module(load="mmnormalize")
+# sender
+module(load="omelasticsearch")
+
+input(type="imfile"
+      File="/var/log/example.log.smaller"
+      Tag="apache:"
+)
+
+global(
+  workDirectory="/var/run/"
+)
+
+main_queue(
+  queue.workerThreads="4"
+  queue.dequeueBatchSize="1000"
+  queue.highWatermark="500000"    # max no. of events to hold in memory
+  queue.lowWatermark="200000"     # use memory queue again, when it's back to this level
+  queue.spoolDirectory="/var/run/rsyslog/queues"  # where to write on disk
+  queue.fileName="stats_ruleset"
+  queue.maxDiskSpace="5g"        # it will stop at this much disk space
+  queue.size="5000000"           # or this many messages
+  queue.saveOnShutdown="on"      # save memory queue contents to disk when rsyslog is exiting
+)
+
+# try to parse logs
+action(type="mmnormalize"
+  rulebase="/etc/rsyslog_apache.rb"
+)
+
+# template for successfully parsed logs
+template(name="all-json" type="list"){
+  property(name="$!all-json")
+}
+
+# template for plain (unparsed) syslog
+template(name="plain-syslog"
+  type="list") {
+    constant(value="{")
+      constant(value="\"timestamp\":\"")     property(name="timereported" dateFormat="rfc3339")
+      constant(value="\",\"host\":\"")        property(name="hostname")
+      constant(value="\",\"severity\":\"")    property(name="syslogseverity-text")
+      constant(value="\",\"facility\":\"")    property(name="syslogfacility-text")
+      constant(value="\",\"tag\":\"")   property(name="syslogtag" format="json")
+      constant(value="\",\"message\":\"")    property(name="msg" format="json")
+    constant(value="\"}")
+}
+
+# template for index names in logstash-YYYY.MM.DD format
+template(name="logstash-index"
+  type="list") {
+    constant(value="logstash-")
+    property(name="timereported" dateFormat="rfc3339" position.from="1" position.to="4")
+    constant(value=".")
+    property(name="timereported" dateFormat="rfc3339" position.from="6" position.to="7")
+    constant(value=".")
+    property(name="timereported" dateFormat="rfc3339" position.from="9" position.to="10")
+}
+
+# send to Elasticsearch
+if $parsesuccess == "OK" then {
+ action(type="omelasticsearch"
+  template="all-json"
+  dynSearchIndex="on"
+  searchIndex="logstash-index"
+  searchType="apache"
+  server="localhost"
+  serverPort="9200"
+  bulkMode="on"
+  action.resumeRetryCount="-1"
+ )
+} else {
+ action(type="omelasticsearch"
+  template="plain-syslog"
+  dynSearchIndex="on"
+  searchIndex="logstash-index"
+  searchType="system"
+  server="localhost"
+  serverPort="9200"
+  bulkMode="on"
+  action.resumeRetryCount="-1"
+ )
+}

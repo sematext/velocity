@@ -1,0 +1,64 @@
+# system logs
+module(load="imuxsock")
+module(load="imklog")
+# file
+module(load="imfile")
+# parser
+module(load="mmnormalize")
+# sender
+module(load="omkafka")
+
+input(type="imfile"
+      File="/var/log/example.log.smaller"
+      Tag="apache:"
+)
+
+global(
+  workDirectory="/var/run/"
+)
+
+main_queue(
+  queue.workerthreads="1"      # threads to work on the queue
+  queue.dequeueBatchSize="100" # max number of messages to process at once
+  queue.size="10000"           # max queue size
+)
+
+# try to parse logs
+action(type="mmnormalize"
+  rulebase="/etc/rsyslog_apache.rb"
+)
+
+# template for successfully parsed logs
+template(name="all-json" type="list"){
+  property(name="$!all-json")
+}
+
+# template for plain (unparsed) syslog
+template(name="plain-syslog"
+  type="list") {
+    constant(value="{")
+      constant(value="\"timestamp\":\"")     property(name="timereported" dateFormat="rfc3339")
+      constant(value="\",\"host\":\"")        property(name="hostname")
+      constant(value="\",\"severity\":\"")    property(name="syslogseverity-text")
+      constant(value="\",\"facility\":\"")    property(name="syslogfacility-text")
+      constant(value="\",\"tag\":\"")   property(name="syslogtag" format="json")
+      constant(value="\",\"message\":\"")    property(name="msg" format="json")
+    constant(value="\"}")
+}
+
+# send to Kafka
+if $parsesuccess == "OK" then {
+ action(type="omkafka"
+  broker=["localhost:9092"]
+  topic="rsyslog_logstash"
+  template="all-json"
+  action.resumeRetryCount="-1"
+ )
+} else {
+ action(type="omkafka"
+  broker=["localhost:9092"]
+  topic="rsyslog_logstash"
+  template="plain-syslog"
+  action.resumeRetryCount="-1"
+ )
+}
