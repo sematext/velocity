@@ -29,64 +29,6 @@ apt-get install elasticsearch
 wget https://download.elastic.co/kibana/kibana/kibana-4.2.0-beta2-linux-x64.tar.gz
 tar zxf kibana-4.2.0-beta2-linux-x64.tar.gz
 
-
-###############
-# logstash
-###############
-# base conf
-cp apache.conf.direct /etc/logstash/conf.d/apache.conf
-
-# things you may want to tune
-vim /etc/default/logstash
-
-# if you want to start from scratch
-rm /var/lib/logstash/.sincedb*
-
-service elasticsearch start
-curl -XDELETE localhost:9200/_all
-service logstash start
-# waaait for it
-service logstash stop
-
-################
-# rsyslog
-################
-# base conf
-cp /etc/rsyslog.conf.direct /etc/rsyslog.conf
-# mmnormalize rulebase
-vim /etc/rsyslog_apache.rb
-
-# if you want to start from scratch
-rm /var/run/imfile-state*
-curl -XDELETE localhost:9200/_all
-
-service rsyslog restart
-# waaait for it
-service rsyslog stop
-
-################
-# rsyslog + Kafka + Logstash
-################
-# if you want to start from scratch
-rm /var/run/imfile-state*
-curl -XDELETE localhost:9200/_all
-
-# set up Kafka
-cd kafka_2.11-0.8.2.2/
-bin/zookeeper-server-start.sh config/zookeeper.properties
-bin/kafka-server-start.sh config/server.properties
-
-# already created
-bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic rsyslog_logstash
-
-# set up rsyslog and Logstash
-cp /etc/rsyslog.conf.kafka /etc/rsyslog.conf
-cp apache.conf.kafka /etc/logstash/conf.d/apache.conf
-
-# start them
-service logstash restart
-service rsyslog restart
-
 ##############
 # Elasticsearch demo
 ##############
@@ -279,7 +221,7 @@ curl localhost:9200/_cat/shards?v
 
 # third one's a charm
 
-bin/elasticsearch --node.name velocity02
+bin/elasticsearch --node.name velocity03
 curl localhost:9200/_cat/shards?v
 
 # shutdown one by one
@@ -311,10 +253,6 @@ curl localhost:9200/logstash*/_search
 # or better still, search one by one, like Kibana does
 
 # show templates in this context
-
-curl localhost:9200/_template?pretty
-
-curl -XDELETE localhost:9200/_template/logstash
 
 curl -XPUT localhost:9200/_template/logstash_new -d '{
   "template": "logstash*",
@@ -410,7 +348,7 @@ curl -XPUT localhost:9200/_template/logstash_new -d '{
 
 # hot&cold tags - start nodes
 vim /etc/elasticsearch/elasticsearch.yml
-service elasticsearch restart
+
 #hot
 bin/elasticsearch --node.tag cold --node.name velocitycold01
 
@@ -439,3 +377,62 @@ curl -XPUT localhost:9200/logstash_2015-10-12/_settings -d '{
 }'
 
 curl localhost:9200/_cat/shards?v
+
+
+###############
+# logstash
+###############
+# base conf
+cp apache.conf.direct /etc/logstash/conf.d/apache.conf
+
+# things you may want to tune
+vim /etc/default/logstash
+
+# if you want to start from scratch
+rm /var/lib/logstash/.sincedb*
+
+service elasticsearch start
+curl -XDELETE localhost:9200/_all
+service logstash start
+# waaait for it
+service logstash stop
+
+################
+# rsyslog
+################
+# base conf
+cp /etc/rsyslog.conf.direct /etc/rsyslog.conf
+# mmnormalize rulebase
+vim /etc/rsyslog_apache.rb
+
+# if you want to start from scratch
+rm /var/run/imfile-state*
+curl -XDELETE localhost:9200/_all
+
+service rsyslog restart
+# waaait for it
+service rsyslog stop
+
+################
+# rsyslog + Kafka + Logstash
+################
+# if you want to start from scratch
+rm /var/run/imfile-state*
+curl -XDELETE localhost:9200/_all
+
+# set up Kafka
+cd kafka_2.11-0.8.2.2/
+bin/zookeeper-server-start.sh config/zookeeper.properties
+bin/kafka-server-start.sh config/server.properties
+
+# already created
+bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic rsyslog_logstash
+
+# set up rsyslog and Logstash
+cp /etc/rsyslog.conf.kafka /etc/rsyslog.conf
+cp apache.conf.kafka /etc/logstash/conf.d/apache.conf
+
+# start them
+service logstash restart
+service rsyslog restart
+
