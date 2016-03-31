@@ -8,8 +8,7 @@ input {
 
 output {
   elasticsearch {
-    hosts => "localhost"
-    port => 9200
+    hosts => "localhost:9200"
     manage_template => false
     # workers => 5
   }
